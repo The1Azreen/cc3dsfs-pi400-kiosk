@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+LOG_FILE="/home/pi/cc3dsfs-kiosk.log"
+
 echo "=== Updating system ==="
 sudo apt update && sudo apt full-upgrade -y
 
@@ -46,5 +48,31 @@ Exec=/bin/sh -c "xset s off && xset -dpms && xset s noblank"
 Terminal=false
 EOF
 
+echo "=== Creating systemd user service for auto-restart ==="
+mkdir -p /home/pi/.config/systemd/user
+cat > /home/pi/.config/systemd/user/cc3dsfs.service <<'EOF'
+[Unit]
+Description=cc3dsfs kiosk (auto-restart)
+After=graphical-session.target
+
+[Service]
+ExecStart=/home/pi/cc3dsfs/build/cc3dsfs --fullscreen
+Restart=always
+RestartSec=5
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/pi/.Xauthority
+StandardOutput=append:/home/pi/cc3dsfs-kiosk.log
+StandardError=append:/home/pi/cc3dsfs-kiosk.log
+
+[Install]
+WantedBy=default.target
+EOF
+
+echo "=== Enabling systemd user service ==="
+sudo loginctl enable-linger pi || true
+systemctl --user daemon-reload
+systemctl --user enable --now cc3dsfs.service || true
+
 echo "=== Setup complete! ==="
-echo "Reboot your Pi to launch cc3dsfs automatically in fullscreen kiosk mode."
+echo "Log file: $LOG_FILE"
+echo "Reboot your Pi to start cc3dsfs in kiosk mode with auto-restart."

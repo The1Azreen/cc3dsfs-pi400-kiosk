@@ -14,6 +14,16 @@ sudo apt install -y g++ git cmake \
   libfreetype-dev libharfbuzz-dev xorg-dev \
   libgpiod-dev x11-xserver-utils
 
+echo "=== Installing GPIO libraries ==="
+sudo apt install -y python3-gpiozero python3-rpi.gpio pigpio
+
+echo "=== Enabling pigpio daemon ==="
+sudo systemctl enable pigpiod
+sudo systemctl start pigpiod
+
+echo "=== Adding 'pi' user to GPIO group ==="
+sudo usermod -a -G gpio pi
+
 echo "=== Cloning cc3dsfs repo ==="
 cd /home/pi
 git clone https://github.com/Lorenzooone/cc3dsfs.git || true
@@ -74,5 +84,6 @@ systemctl --user daemon-reload
 systemctl --user enable --now cc3dsfs.service || true
 
 echo "=== Setup complete! ==="
+echo "GPIO support enabled: user 'pi' added to gpio group, pigpiod running"
 echo "Log file: $LOG_FILE"
 echo "Reboot your Pi to start cc3dsfs in kiosk mode with auto-restart."

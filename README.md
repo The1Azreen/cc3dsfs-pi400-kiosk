@@ -42,3 +42,6 @@ Once the OS setup is complete, open **Terminal** on your Pi and run:
 
 ```bash
 bash <(curl -s https://raw.githubusercontent.com/The1Azreen/cc3dsfs-pi400-kiosk/main/setup.sh)
+```
+
+## Pictures of the cc3dsfs in action

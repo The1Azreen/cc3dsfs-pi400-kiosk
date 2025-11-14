@@ -1,89 +1,51 @@
-#!/bin/bash
-set -e
+#!/bin/sh
 
-LOG_FILE="/home/pi/cc3dsfs-kiosk.log"
+if [ "$(id -u)" -eq "0" ]; then
+   echo "This script must be run as a regular user!";
+   exit 1;
+fi
 
-echo "=== Updating system ==="
-sudo apt update && sudo apt full-upgrade -y
+sudo apt update
+sudo apt -y install xterm gpiod xserver-xorg xinit libxcursor1 x11-xserver-utils pipewire pipewire-alsa
 
-echo "=== Installing build dependencies ==="
-sudo apt install -y g++ git cmake \
-  libxrandr-dev libxcursor-dev libudev-dev \
-  libflac-dev libvorbis-dev libgl1-mesa-dev \
-  libegl1-mesa-dev libdrm-dev libgbm-dev \
-  libfreetype-dev libharfbuzz-dev xorg-dev \
-  libgpiod-dev x11-xserver-utils
+sudo raspi-config nonint do_boot_behaviour B2
 
-echo "=== Installing GPIO libraries ==="
-sudo apt install -y python3-gpiozero python3-rpi.gpio pigpio
+sudo systemctl disable avahi-daemon.service
+sudo systemctl disable dphys-swapfile.service
+sudo systemctl disable hciuart.service
+sudo systemctl disable bluetooth.service
+#sudo systemctl disable wpa_supplicant.service
 
-echo "=== Enabling pigpio daemon ==="
-sudo systemctl enable pigpiod
-sudo systemctl start pigpiod
+# I know this isn't how you SHOULD do it, however I tried
+# various other things (crontab @reboot and rc.local) and they didn't work...
+echo "" >> ${HOME}/.bashrc
+echo 'if [ -z "${EXECUTED_ONCE}" ]; then' >> ${HOME}/.bashrc
+echo "  export EXECUTED_ONCE=1 ; startx ${HOME}/Desktop/cc3dsfs_script.sh" >> ${HOME}/.bashrc
+echo 'fi' >> ${HOME}/.bashrc
 
-echo "=== Adding 'pi' user to GPIO group ==="
-sudo usermod -a -G gpio pi
+cp -Rf files/Desktop/ ${HOME}/
+if [ $(getconf LONG_BIT) -eq 32 ]; then
+  $(cd ${HOME}/Desktop ; ln -s cc3dsfs_versions/cc3dsfs_32 cc3dsfs)
+else
+  $(cd ${HOME}/Desktop ; ln -s cc3dsfs_versions/cc3dsfs_64 cc3dsfs)
+fi
+chmod +x -R ${HOME}/Desktop/premade_scripts/
+chmod +x -R ${HOME}/Desktop/cc3dsfs_versions/
+chmod +x ${HOME}/Desktop/cc3dsfs
+chmod +x ${HOME}/Desktop/cc3dsfs_script.sh
 
-echo "=== Cloning cc3dsfs repo ==="
-cd /home/pi
-git clone https://github.com/Lorenzooone/cc3dsfs.git || true
-cd cc3dsfs
+if [ -e /boot/firmware/config.txt ]; then
+  FIRMWARE=/firmware
+else
+  FIRMWARE=
+fi
 
-echo "=== Building cc3dsfs ==="
-cmake -B build -DCMAKE_BUILD_TYPE=Release -DRASPBERRY_PI_COMPILATION=TRUE
-cmake --build build --config Release -j$(nproc)
+sudo cp -f files/config.txt /boot${FIRMWARE}/config.txt
 
-echo "=== Installing udev rules ==="
-sudo cp usb_rules/*.rules /etc/udev/rules.d/ || true
-sudo udevadm control --reload-rules
-sudo udevadm trigger
+sudo cp -Rf files/usr/ /
+sudo cp -Rf files/etc/ /
+sudo chmod +x /etc/rc.local
 
-echo "=== Creating autostart entry (kiosk mode) ==="
-mkdir -p /home/pi/.config/autostart
-cat > /home/pi/.config/autostart/cc3dsfs.desktop <<'EOF'
-[Desktop Entry]
-Type=Application
-Name=cc3dsfs Kiosk
-Exec=/home/pi/cc3dsfs/build/cc3dsfs --fullscreen
-StartupNotify=false
-Terminal=false
-EOF
+sleep 5
 
-echo "=== Disabling screen blanking ==="
-cat > /home/pi/.config/autostart/disable-screensaver.desktop <<'EOF'
-[Desktop Entry]
-Type=Application
-Name=Disable screensaver
-Exec=/bin/sh -c "xset s off && xset -dpms && xset s noblank"
-Terminal=false
-EOF
-
-echo "=== Creating systemd user service for auto-restart ==="
-mkdir -p /home/pi/.config/systemd/user
-cat > /home/pi/.config/systemd/user/cc3dsfs.service <<'EOF'
-[Unit]
-Description=cc3dsfs kiosk (auto-restart)
-After=graphical-session.target
-
-[Service]
-ExecStart=/home/pi/cc3dsfs/build/cc3dsfs --fullscreen
-Restart=always
-RestartSec=5
-Environment=DISPLAY=:0
-Environment=XAUTHORITY=/home/pi/.Xauthority
-StandardOutput=append:/home/pi/cc3dsfs-kiosk.log
-StandardError=append:/home/pi/cc3dsfs-kiosk.log
-
-[Install]
-WantedBy=default.target
-EOF
-
-echo "=== Enabling systemd user service ==="
-sudo loginctl enable-linger pi || true
-systemctl --user daemon-reload
-systemctl --user enable --now cc3dsfs.service || true
-
-echo "=== Setup complete! ==="
-echo "GPIO support enabled: user 'pi' added to gpio group, pigpiod running"
-echo "Log file: $LOG_FILE"
-echo "Reboot your Pi to start cc3dsfs in kiosk mode with auto-restart."
+sudo reboot

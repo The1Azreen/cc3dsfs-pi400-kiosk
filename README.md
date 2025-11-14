@@ -45,3 +45,7 @@ bash <(curl -s https://raw.githubusercontent.com/The1Azreen/cc3dsfs-pi400-kiosk/
 ```
 
 ## Pictures of the cc3dsfs in action
+
+![cc3dsfs in action — screenshot 1](screenshot1.jpg)
+
+*Figure 1 — cc3dsfs running in kiosk mode (screenshot1.jpg).*
